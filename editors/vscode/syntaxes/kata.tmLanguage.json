@@ -1,0 +1,367 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Kata",
+  "scopeName": "source.kata",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#directive-model" },
+    { "include": "#directive-role" },
+    { "include": "#directive-context" },
+    { "include": "#directive-task" },
+    { "include": "#directive-output" },
+    { "include": "#directive-constraint" },
+    { "include": "#directive-chain" },
+    { "include": "#directive-fn" },
+    { "include": "#directive-call" },
+    { "include": "#directive-generic" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.kata"
+    },
+
+    "directive-model": {
+      "match": "(@)(model)\\s+(.*?)\\s*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.directive.kata" },
+        "2": { "name": "keyword.control.directive.model.kata" },
+        "3": { "name": "string.unquoted.model-name.kata" }
+      }
+    },
+
+    "directive-role": {
+      "patterns": [
+        {
+          "match": "(@)(role)\\s+((?!\\{).*?)\\s*$",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.role.kata" },
+            "3": { "name": "string.unquoted.role.kata" }
+          }
+        },
+        {
+          "begin": "(@)(role)\\s*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.role.kata" },
+            "3": { "name": "punctuation.section.block.begin.kata" }
+          },
+          "end": "(\\})",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.block.end.kata" }
+          },
+          "name": "meta.directive.role.kata",
+          "contentName": "meta.block.body.kata",
+          "patterns": [
+            { "include": "#block-content" }
+          ]
+        }
+      ]
+    },
+
+    "directive-context": {
+      "patterns": [
+        {
+          "match": "(@)(context)\\s+((?!\\{).*?)\\s*$",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.context.kata" },
+            "3": { "name": "string.unquoted.context.kata" }
+          }
+        },
+        {
+          "begin": "(@)(context)\\s*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.context.kata" },
+            "3": { "name": "punctuation.section.block.begin.kata" }
+          },
+          "end": "(\\})",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.block.end.kata" }
+          },
+          "name": "meta.directive.context.kata",
+          "contentName": "meta.block.body.kata",
+          "patterns": [
+            { "include": "#block-content" }
+          ]
+        }
+      ]
+    },
+
+    "directive-task": {
+      "patterns": [
+        {
+          "match": "(@)(task)\\s+((?!\\{).*?)\\s*$",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.task.kata" },
+            "3": { "name": "string.unquoted.task.kata" }
+          }
+        },
+        {
+          "begin": "(@)(task)\\s*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.task.kata" },
+            "3": { "name": "punctuation.section.block.begin.kata" }
+          },
+          "end": "(\\})",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.block.end.kata" }
+          },
+          "name": "meta.directive.task.kata",
+          "contentName": "meta.block.body.kata",
+          "patterns": [
+            { "include": "#block-content" }
+          ]
+        }
+      ]
+    },
+
+    "directive-output": {
+      "match": "(@)(output)\\s+(.*?)\\s*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.directive.kata" },
+        "2": { "name": "keyword.control.directive.output.kata" },
+        "3": {
+          "patterns": [
+            { "include": "#output-properties" }
+          ]
+        }
+      }
+    },
+
+    "directive-constraint": {
+      "patterns": [
+        {
+          "match": "(@)(constraint)\\s+((?!\\{).*?)\\s*$",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.constraint.kata" },
+            "3": { "name": "string.unquoted.constraint.kata" }
+          }
+        },
+        {
+          "begin": "(@)(constraint)\\s*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.constraint.kata" },
+            "3": { "name": "punctuation.section.block.begin.kata" }
+          },
+          "end": "(\\})",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.block.end.kata" }
+          },
+          "name": "meta.directive.constraint.kata",
+          "contentName": "meta.block.body.kata",
+          "patterns": [
+            { "include": "#block-content" }
+          ]
+        }
+      ]
+    },
+
+    "directive-chain": {
+      "patterns": [
+        {
+          "begin": "(@)(chain)\\s*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.chain.kata" },
+            "3": { "name": "punctuation.section.block.begin.kata" }
+          },
+          "end": "(\\})",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.block.end.kata" }
+          },
+          "name": "meta.directive.chain.kata",
+          "patterns": [
+            { "include": "#step" },
+            { "include": "#comment" },
+            { "include": "#directive-generic" }
+          ]
+        },
+        { "include": "#step" }
+      ]
+    },
+
+    "step": {
+      "match": "(@)(step)\\s+(\\w+)",
+      "captures": {
+        "1": { "name": "punctuation.definition.directive.kata" },
+        "2": { "name": "keyword.control.directive.step.kata" },
+        "3": { "name": "entity.name.function.step.kata" }
+      }
+    },
+
+    "directive-fn": {
+      "patterns": [
+        {
+          "begin": "(@)(fn)\\s+(\\w+)\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.fn.kata" },
+            "3": { "name": "entity.name.function.kata" },
+            "4": { "name": "punctuation.definition.parameters.begin.kata" }
+          },
+          "end": "(\\))",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.parameters.end.kata" }
+          },
+          "name": "meta.directive.fn.params.kata",
+          "patterns": [
+            {
+              "match": "[a-zA-Z_]\\w*",
+              "name": "variable.parameter.kata"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.kata"
+            }
+          ]
+        },
+        {
+          "match": "(@)(fn)\\s+(\\w+)",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.fn.kata" },
+            "3": { "name": "entity.name.function.kata" }
+          }
+        }
+      ]
+    },
+
+    "directive-call": {
+      "patterns": [
+        {
+          "begin": "(@)(call)\\s+(\\w+)\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.call.kata" },
+            "3": { "name": "entity.name.function.kata" },
+            "4": { "name": "punctuation.definition.arguments.begin.kata" }
+          },
+          "end": "(\\))",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.arguments.end.kata" }
+          },
+          "name": "meta.directive.call.args.kata",
+          "patterns": [
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.kata"
+            },
+            {
+              "match": "[^,)]+",
+              "name": "string.unquoted.argument.kata"
+            }
+          ]
+        },
+        {
+          "match": "(@)(call)\\s+(\\w+)",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.call.kata" },
+            "3": { "name": "entity.name.function.kata" }
+          }
+        }
+      ]
+    },
+
+    "directive-generic": {
+      "patterns": [
+        {
+          "match": "(@)(\\w+)\\s+((?!\\{).*?)\\s*$",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.kata" },
+            "3": { "name": "string.unquoted.kata" }
+          }
+        },
+        {
+          "begin": "(@)(\\w+)\\s*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.kata" },
+            "3": { "name": "punctuation.section.block.begin.kata" }
+          },
+          "end": "(\\})",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.block.end.kata" }
+          },
+          "name": "meta.directive.kata",
+          "contentName": "meta.block.body.kata",
+          "patterns": [
+            { "include": "#block-content" }
+          ]
+        }
+      ]
+    },
+
+    "output-properties": {
+      "patterns": [
+        {
+          "match": "([a-zA-Z_][a-zA-Z0-9_]*)\\s*(:)\\s*([^,]+)",
+          "captures": {
+            "1": { "name": "variable.other.property.kata" },
+            "2": { "name": "punctuation.separator.colon.kata" },
+            "3": { "name": "constant.other.value.kata" }
+          }
+        }
+      ]
+    },
+
+    "block-content": {
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#interpolation" },
+        {
+          "match": "^\\s*(\\d+\\.)",
+          "captures": {
+            "1": { "name": "markup.list.numbered.kata" }
+          }
+        },
+        {
+          "match": "^\\s*(-)",
+          "captures": {
+            "1": { "name": "markup.list.unnumbered.kata" }
+          }
+        },
+        {
+          "match": "([a-zA-Z_]\\w*)(\\()([^)]*)(\\))",
+          "captures": {
+            "1": { "name": "entity.name.type.kata" },
+            "2": { "name": "punctuation.definition.parameters.begin.kata" },
+            "3": {
+              "patterns": [
+                {
+                  "match": "[a-zA-Z_]\\w*",
+                  "name": "variable.parameter.kata"
+                }
+              ]
+            },
+            "4": { "name": "punctuation.definition.parameters.end.kata" }
+          }
+        },
+        {
+          "match": "^\\s*([A-Za-z_][A-Za-z0-9_ ]*)(:)\\s",
+          "captures": {
+            "1": { "name": "variable.other.property.kata" },
+            "2": { "name": "punctuation.separator.colon.kata" }
+          }
+        }
+      ]
+    },
+
+    "interpolation": {
+      "match": "(\\$\\{)(\\w+)(\\})",
+      "captures": {
+        "1": { "name": "punctuation.definition.interpolation.begin.kata" },
+        "2": { "name": "variable.other.interpolation.kata" },
+        "3": { "name": "punctuation.definition.interpolation.end.kata" }
+      }
+    }
+  }
+}

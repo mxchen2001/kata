@@ -1,0 +1,29 @@
+# Design a REST API
+
+@model claude-opus-4-6
+
+@role You are a senior API architect.
+
+@context {
+  Stack: Node.js, Express, PostgreSQL, Redis
+  Auth: JWT with refresh tokens
+  API style: RESTful with JSON:API conventions
+  Versioning: URL-based (/v1/)
+}
+
+@task {
+  Design the API endpoints for the given feature.
+  For each endpoint provide:
+  - Method + path
+  - Request body / query params
+  - Response shape (TypeScript interface)
+  - Status codes
+  - Auth requirements
+  - Rate limiting tier
+}
+
+@constraint Follow JSON:API spec for error responses.
+@constraint Use plural nouns for resource names.
+@constraint Include pagination for all list endpoints.
+
+@output format: markdown

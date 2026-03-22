@@ -1,0 +1,7 @@
+# Unclosed block — missing closing brace
+
+@model gpt-4o
+@role You are helpful.
+@task {
+  Do something important.
+  This block never closes.

@@ -1,0 +1,25 @@
+# Translate natural language to SQL
+
+@model claude-sonnet-4-6
+
+@role You are a SQL expert specializing in PostgreSQL.
+
+@context {
+  Schema:
+    users(id, email, name, created_at, plan)
+    orders(id, user_id, amount, status, created_at)
+    products(id, name, price, category)
+    order_items(id, order_id, product_id, quantity)
+}
+
+@task {
+  Convert the following natural language query into a PostgreSQL query.
+  Use CTEs when the logic benefits from it.
+  Include comments explaining non-obvious joins or filters.
+}
+
+@constraint Never use SELECT *.
+@constraint Always alias tables.
+@constraint Use parameterized placeholders ($1, $2) for user-supplied values.
+
+@output format: sql

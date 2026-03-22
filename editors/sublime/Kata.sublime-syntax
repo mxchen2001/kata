@@ -1,0 +1,106 @@
+%YAML 1.2
+---
+name: Kata
+file_extensions: [kata]
+scope: source.kata
+
+contexts:
+  main:
+    - include: comments
+    - include: directives
+
+  comments:
+    - match: '#.*$'
+      scope: comment.line.number-sign.kata
+
+  directives:
+    # @model <name>
+    - match: '(@)(model)\s+(.*?)\s*$'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.model.kata
+        3: string.unquoted.model-name.kata
+
+    # @role (inline)
+    - match: '(@)(role)\s+((?!\{).*?)\s*$'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.role.kata
+        3: string.unquoted.role.kata
+
+    # @output key: value, key: value
+    - match: '(@)(output)\s+(.*?)\s*$'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.output.kata
+        3: meta.output-properties.kata
+
+    # @constraint (inline)
+    - match: '(@)(constraint)\s+((?!\{).*?)\s*$'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.constraint.kata
+        3: string.unquoted.constraint.kata
+
+    # @step <name>
+    - match: '(@)(step)\s+(\w+)'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.step.kata
+        3: entity.name.function.step.kata
+
+    # @directive with block body
+    - match: '(@)(model|role|context|task|output|constraint|chain|step)(?=\s*\{)'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.kata
+      push: expect-block
+
+    # @unknown directive (inline)
+    - match: '(@)(\w+)\s+((?!\{).*?)\s*$'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.kata
+        3: string.unquoted.kata
+
+    # @unknown directive with block
+    - match: '(@)(\w+)(?=\s*\{)'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.kata
+      push: expect-block
+
+  expect-block:
+    - match: '\{'
+      scope: punctuation.section.block.begin.kata
+      set: block-body
+
+  block-body:
+    - match: '\}'
+      scope: punctuation.section.block.end.kata
+      pop: true
+    - include: comments
+    # Numbered list
+    - match: '^\s*(\d+\.)'
+      captures:
+        1: markup.list.numbered.kata
+    # Dash list
+    - match: '^\s*(-)\s'
+      captures:
+        1: markup.list.unnumbered.kata
+    # Schema definitions: table_name(col1, col2)
+    - match: '([a-zA-Z_]\w*)(\()([^)]*)(\))'
+      captures:
+        1: entity.name.type.kata
+        2: punctuation.definition.parameters.begin.kata
+        3: variable.parameter.kata
+        4: punctuation.definition.parameters.end.kata
+    # Key: value
+    - match: '^\s*([A-Za-z_][A-Za-z0-9_ ]*)(:)'
+      captures:
+        1: variable.other.property.kata
+        2: punctuation.separator.colon.kata
+    # Nested blocks
+    - match: '\{'
+      scope: punctuation.section.block.begin.kata
+      push: block-body

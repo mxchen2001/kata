@@ -1,0 +1,31 @@
+# Generate a utility module and its tests
+
+@fn implement(spec) {
+  @model claude-sonnet-4-6
+  @role You are a senior Python developer.
+  @task {
+    Implement the following specification as a Python module.
+    Only output the code, no explanation.
+
+    ${spec}
+  }
+  @constraint Use type hints on all functions.
+  @constraint No external dependencies — stdlib only.
+  @output format: python, file: solution.py
+}
+
+@fn test(framework) {
+  @model claude-sonnet-4-6
+  @role You are a test engineer who writes thorough, readable tests.
+  @task {
+    Given the Python module above, write a comprehensive test suite using ${framework}.
+    Cover: happy path, edge cases, and error cases.
+    Only output the code, no explanation.
+  }
+  @constraint Each test should have a descriptive name.
+  @constraint Group related tests in classes.
+  @output format: python, file: test_solution.py
+}
+
+@call implement(A duration parser that converts human-readable strings like "2h30m" and "1d12h" and "45s" and "1w2d" into total seconds. Support w/d/h/m/s units. Raise ValueError on invalid input.)
+@call test(pytest)

@@ -1,0 +1,14 @@
+# Duplicate function definitions
+
+@fn greet(name) {
+  @role You are ${name}.
+  @task Say hello.
+}
+
+@fn greet(person) {
+  @role You are ${person}.
+  @task Say goodbye.
+}
+
+@model gpt-4o
+@call greet(Alice)

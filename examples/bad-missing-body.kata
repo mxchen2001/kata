@@ -1,0 +1,5 @@
+# Missing body — @task with nothing after it
+
+@model gpt-4o
+@role You are helpful.
+@task

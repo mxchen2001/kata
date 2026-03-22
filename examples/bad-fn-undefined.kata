@@ -1,0 +1,4 @@
+# Call a function that doesn't exist
+
+@model gpt-4o
+@call review(TypeScript, security)

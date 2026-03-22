@@ -1,0 +1,6 @@
+# Unknown directive name
+
+@model gpt-4o
+@role You are helpful.
+@vibe chill
+@task Do something.

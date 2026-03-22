@@ -1,0 +1,9 @@
+# Wrong number of arguments
+
+@fn greet(name) {
+  @role You are ${name}.
+  @task Say hello.
+}
+
+@model gpt-4o
+@call greet(Alice, Bob)

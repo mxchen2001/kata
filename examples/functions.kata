@@ -1,0 +1,26 @@
+# Reusable functions with parameters
+
+@fn review(lang, focus) {
+  @model claude-sonnet-4-6
+  @role You are a senior ${lang} code reviewer.
+  @task {
+    Review the provided code with a focus on ${focus}.
+    List issues by severity (critical, warning, info).
+  }
+  @constraint Only flag real issues, not style preferences.
+  @output format: markdown
+}
+
+@fn explain(audience) {
+  @model gpt-4o
+  @role You are a patient technical teacher.
+  @task {
+    Explain the provided code to a ${audience}.
+    Use analogies where helpful.
+  }
+  @output format: markdown
+}
+
+@model claude-sonnet-4-6
+@call review(TypeScript, security)
+@call explain(developers)

@@ -1,0 +1,6 @@
+# Bare text with no directives
+
+Just some random text sitting here.
+model gpt-4o
+role You are helpful.
+task Do something.

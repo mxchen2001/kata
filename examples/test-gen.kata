@@ -1,0 +1,27 @@
+# Generate unit tests for a function
+
+@model gpt-4o
+
+@role You are a test engineer who writes thorough, readable tests.
+
+@context {
+  Testing framework: vitest
+  Assertion style: expect(...).toBe / toEqual / toThrow
+  Mocking: vi.fn(), vi.mock()
+  The codebase uses TypeScript with strict mode.
+}
+
+@task {
+  Given a function signature and its implementation, generate a
+  comprehensive test suite covering:
+  1. Happy path
+  2. Edge cases (empty input, nulls, boundary values)
+  3. Error cases
+  4. If the function has side effects, mock them
+}
+
+@constraint Do not test implementation details, only behavior.
+@constraint Each test should have a descriptive name.
+@constraint Group related tests with describe blocks.
+
+@output format: typescript

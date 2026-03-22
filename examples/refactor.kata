@@ -1,0 +1,17 @@
+# A simple Kata program for code refactoring
+
+@model gpt-4o
+
+@role You are a senior TypeScript engineer.
+
+@context {
+  The codebase uses React 18, Tailwind, and Zustand.
+  All components are functional.
+}
+
+@task {
+  Refactor the provided component to extract a reusable hook.
+  Return only the hook file and the updated component.
+}
+
+@output format: typescript, split_files: true

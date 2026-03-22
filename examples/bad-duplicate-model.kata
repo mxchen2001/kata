@@ -1,0 +1,6 @@
+# Duplicate @model — which one wins?
+
+@model gpt-4o
+@model claude-sonnet-4-6
+@role You are helpful.
+@task Do something.

@@ -1,0 +1,19 @@
+# Summarize a long document
+
+@model claude-sonnet-4-6
+
+@role You are a research assistant skilled at distilling complex material.
+
+@task {
+  Summarize the provided document.
+  Produce three sections:
+  - Key Takeaways (3-5 bullet points)
+  - Detailed Summary (2-3 paragraphs)
+  - Open Questions (anything unclear or unresolved)
+}
+
+@constraint Preserve technical terminology — do not simplify jargon.
+@constraint If the document contains data or statistics, include the exact numbers.
+@constraint Keep the total summary under 500 words.
+
+@output format: markdown

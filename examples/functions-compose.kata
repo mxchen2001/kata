@@ -1,0 +1,17 @@
+# Composing multiple function calls
+
+@fn set_style(tone) {
+  @role You are a writer with a ${tone} tone.
+}
+
+@fn write_docs(format) {
+  @task {
+    Write documentation for the provided code.
+    Cover: purpose, parameters, return value, examples.
+  }
+  @output format: ${format}
+}
+
+@model gpt-4o
+@call set_style(concise and technical)
+@call write_docs(markdown)

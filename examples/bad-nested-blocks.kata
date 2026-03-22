@@ -1,0 +1,9 @@
+# Nested blocks — not currently supported semantics
+
+@model gpt-4o
+@task {
+  Outer task.
+  @context {
+    This is nested inside a task block.
+  }
+}
