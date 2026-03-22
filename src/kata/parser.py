@@ -183,9 +183,17 @@ class Parser:
             body = self._expect(TokenKind.Body)
             self._expect(TokenKind.BraceClose)
             return body.value
-        if self._check(TokenKind.Text):
-            return self._advance().value
-        return ""
+        # Consume all tokens on this line as inline text
+        parts: list[str] = []
+        while (
+            not self._is_at_end()
+            and not self._check(TokenKind.Newline)
+            and not self._check(TokenKind.At)
+            and not self._check(TokenKind.BraceOpen)
+            and not self._check(TokenKind.EOF)
+        ):
+            parts.append(self._advance().value)
+        return "".join(parts) if parts else ""
 
     def _parse_properties(self, text: str, out: dict[str, str]) -> None:
         for pair in text.split(","):

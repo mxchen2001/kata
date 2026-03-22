@@ -4,11 +4,20 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from .compiler import ExecutionPlan, Step
+
+_FENCE_RE = re.compile(r"^\s*```\w*\n(.*?)```\s*$", re.DOTALL)
+
+
+def _strip_code_fence(text: str) -> str:
+    """Remove a wrapping markdown code fence if the entire response is fenced."""
+    m = _FENCE_RE.match(text)
+    return m.group(1) if m else text
 
 
 @dataclass
@@ -156,7 +165,10 @@ class Engine:
                 deps = f" <- {', '.join(step.depends_on)}" if step.depends_on else ""
                 print(f">> {step.id} ({tag}){deps}", file=sys.stderr)
 
-            outputs[step.id] = self._execute_step(step, context, outputs)
+            result = self._execute_step(step, context, outputs)
+            if step.output.get("format"):
+                result = _strip_code_fence(result)
+            outputs[step.id] = result
 
         return RunArtifact(plan=plan, outputs=outputs)
 
@@ -217,7 +229,7 @@ class Engine:
         client = self._get_anthropic()
         kwargs: dict = {
             "model": model,
-            "max_tokens": 4096,
+            "max_tokens": 16384,
             "messages": [{"role": "user", "content": user}],
         }
         if system:

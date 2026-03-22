@@ -2,14 +2,18 @@
 
 @fn ping() {
   @model claude-sonnet-4-6
-  @task Say ping.
-  @call pong()
+  @task {
+    Say ping, then:
+    @use pong()
+  }
 }
 
 @fn pong() {
   @model claude-sonnet-4-6
-  @task Say pong.
-  @call ping()
+  @task {
+    Say pong, then:
+    @use ping()
+  }
 }
 
 @call ping()

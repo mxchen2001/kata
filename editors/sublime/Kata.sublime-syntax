@@ -21,7 +21,18 @@ contexts:
         2: keyword.control.directive.model.kata
         3: string.unquoted.model-name.kata
 
-    # @role (inline)
+    # @role :name(arg) — named role reference
+    - match: '(@)(role)\s+(:)(\w+)(?:(\()([^)]*)(\)))?\s*$'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.role.kata
+        3: punctuation.definition.role.kata
+        4: entity.name.type.role.kata
+        5: punctuation.definition.parameters.begin.kata
+        6: variable.parameter.role.kata
+        7: punctuation.definition.parameters.end.kata
+
+    # @role (inline fallback)
     - match: '(@)(role)\s+((?!\{).*?)\s*$'
       captures:
         1: punctuation.definition.directive.kata
@@ -80,6 +91,18 @@ contexts:
       scope: punctuation.section.block.end.kata
       pop: true
     - include: comments
+    # @use fn(args) — inline function reference
+    - match: '(@)(use)\s+(\w+)(?=\s*\()'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.use.kata
+        3: entity.name.function.kata
+      push: use-args
+    - match: '(@)(use)\s+(\w+)'
+      captures:
+        1: punctuation.definition.directive.kata
+        2: keyword.control.directive.use.kata
+        3: entity.name.function.kata
     # Numbered list
     - match: '^\s*(\d+\.)'
       captures:
@@ -104,3 +127,14 @@ contexts:
     - match: '\{'
       scope: punctuation.section.block.begin.kata
       push: block-body
+
+  use-args:
+    - match: '\('
+      scope: punctuation.definition.arguments.begin.kata
+    - match: '\)'
+      scope: punctuation.definition.arguments.end.kata
+      pop: true
+    - match: ','
+      scope: punctuation.separator.comma.kata
+    - match: '[^,)]+'
+      scope: string.unquoted.argument.kata

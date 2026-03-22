@@ -19,7 +19,7 @@
 @role :tester
 @task {
   Write a mock wrapper and test suite for the following implementation:
-  @call implement(A duration parser that converts human-readable strings like "2h30m" and "1d12h" and "45s" and "1w2d" into total seconds. Support w/d/h/m/s units. Raise ValueError on invalid input.)
+  @use implement(A duration parser that converts human-readable strings like "2h30m" and "1d12h" and "45s" and "1w2d" into total seconds. Support w/d/h/m/s units. Raise ValueError on invalid input.)
 }
 @constraint Each test should have a descriptive name.
 @constraint Group related tests in classes.

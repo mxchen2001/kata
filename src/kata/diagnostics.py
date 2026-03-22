@@ -92,7 +92,7 @@ def diagnose(program: Program) -> list[Diagnostic]:
         if body is None:
             continue
         if d.kind == "task":
-            m = re.search(r"^[ \t]*@(?!call\b)(\w+)", body, re.MULTILINE)
+            m = re.search(r"^[ \t]*@(?!use\b)(\w+)", body, re.MULTILINE)
         else:
             m = re.search(r"^[ \t]*@(\w+)", body, re.MULTILINE)
         if m:
@@ -146,7 +146,7 @@ def diagnose(program: Program) -> list[Diagnostic]:
     call_graph: dict[str, set[str]] = {}
     for name, nodes in fn_defs.items():
         fn = nodes[0]
-        calls_in_body = set(re.findall(r"@call\s+(\w+)", fn.body))  # type: ignore[union-attr]
+        calls_in_body = set(re.findall(r"@(?:call|use)\s+(\w+)", fn.body))  # type: ignore[union-attr]
         call_graph[name] = calls_in_body & fn_defs.keys()
 
     cycle = _find_cycle(call_graph)
@@ -159,8 +159,12 @@ def diagnose(program: Program) -> list[Diagnostic]:
             first_fn.span,
         ))
 
-    # Unused functions
-    called_names = {d.name for d in program.directives if d.kind == "call"}  # type: ignore[union-attr]
+    # Unused functions — check top-level @call and inline @use in @task bodies
+    called_names: set[str] = {d.name for d in program.directives if d.kind == "call"}  # type: ignore[union-attr]
+    for d in program.directives:
+        body = _get_body(d)
+        if body and d.kind == "task":
+            called_names.update(re.findall(r"@use\s+(\w+)", body))
     for name, nodes in fn_defs.items():
         if name not in called_names:
             ds.append(Diagnostic(

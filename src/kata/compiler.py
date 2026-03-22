@@ -8,7 +8,7 @@ from .lexer import Lexer
 from .parser import Parser
 from .roles import expand_role
 
-_INLINE_CALL_RE = re.compile(r"@call\s+(\w+)(?:\(([^)]*)\))?")
+_INLINE_USE_RE = re.compile(r"@use\s+(\w+)(?:\(([^)]*)\))?")
 
 
 @dataclass
@@ -65,7 +65,7 @@ class Compiler:
                 fns[d.name] = d
 
         expanded = self._expand_calls(program.directives, fns)
-        ref_steps, expanded = self._resolve_inline_calls(expanded, fns)
+        ref_steps, expanded = self._resolve_inline_uses(expanded, fns)
         plan = self._build_plan(expanded)
 
         if ref_steps:
@@ -123,31 +123,34 @@ class Compiler:
 
         return result
 
-    def _resolve_inline_calls(
+    def _resolve_inline_uses(
         self,
         directives: list[DirectiveNode],
         fns: dict[str, FnDirective],
     ) -> tuple[list[Step], list[DirectiveNode]]:
-        """Resolve @call references inside @task bodies.
+        """Resolve @use references inside @task bodies.
 
-        Each inline @call is compiled into ref steps that run first.
-        The @call text is replaced with {{ref:ref_N}} which the engine
+        Each @use is compiled into ref steps that run first.
+        The @use text is replaced with {{ref:ref_N}} which the engine
         resolves at runtime with the step's actual output.
+
+        Syntax: @call at top level creates a sibling step in the chain.
+                @use inside @task inlines the resolved output in-place.
         """
         ref_steps: list[Step] = []
         modified: list[DirectiveNode] = []
 
         for d in directives:
-            if d.kind == "task" and "@call" in d.body:  # type: ignore[union-attr]
+            if d.kind == "task" and "@use" in d.body:  # type: ignore[union-attr]
                 new_body: str = d.body  # type: ignore[union-attr]
-                for match in _INLINE_CALL_RE.finditer(new_body):
+                for match in _INLINE_USE_RE.finditer(new_body):
                     fn_name = match.group(1)
                     args_str = match.group(2) or ""
                     args = [a.strip() for a in args_str.split(",") if a.strip()] if args_str.strip() else []
 
                     fn = fns.get(fn_name)
                     if fn is None:
-                        raise RuntimeError(f"Undefined function @{fn_name} in inline @call")
+                        raise RuntimeError(f"Undefined function @{fn_name} in @use")
 
                     # Expand function body with args
                     fn_body = fn.body

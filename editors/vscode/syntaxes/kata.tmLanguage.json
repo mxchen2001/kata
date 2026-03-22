@@ -33,6 +33,18 @@
     "directive-role": {
       "patterns": [
         {
+          "match": "(@)(role)\\s+(:)(\\w+)(?:(\\()([^)]*)(\\)))?\\s*$",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.role.kata" },
+            "3": { "name": "punctuation.definition.role.kata" },
+            "4": { "name": "entity.name.type.role.kata" },
+            "5": { "name": "punctuation.definition.parameters.begin.kata" },
+            "6": { "name": "variable.parameter.role.kata" },
+            "7": { "name": "punctuation.definition.parameters.end.kata" }
+          }
+        },
+        {
           "match": "(@)(role)\\s+((?!\\{).*?)\\s*$",
           "captures": {
             "1": { "name": "punctuation.definition.directive.kata" },
@@ -317,6 +329,7 @@
       "patterns": [
         { "include": "#comment" },
         { "include": "#interpolation" },
+        { "include": "#inline-use" },
         {
           "match": "^\\s*(\\d+\\.)",
           "captures": {
@@ -350,6 +363,43 @@
           "captures": {
             "1": { "name": "variable.other.property.kata" },
             "2": { "name": "punctuation.separator.colon.kata" }
+          }
+        }
+      ]
+    },
+
+    "inline-use": {
+      "patterns": [
+        {
+          "begin": "(@)(use)\\s+(\\w+)\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.use.kata" },
+            "3": { "name": "entity.name.function.kata" },
+            "4": { "name": "punctuation.definition.arguments.begin.kata" }
+          },
+          "end": "(\\))",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.arguments.end.kata" }
+          },
+          "name": "meta.directive.use.kata",
+          "patterns": [
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.kata"
+            },
+            {
+              "match": "[^,)]+",
+              "name": "string.unquoted.argument.kata"
+            }
+          ]
+        },
+        {
+          "match": "(@)(use)\\s+(\\w+)",
+          "captures": {
+            "1": { "name": "punctuation.definition.directive.kata" },
+            "2": { "name": "keyword.control.directive.use.kata" },
+            "3": { "name": "entity.name.function.kata" }
           }
         }
       ]

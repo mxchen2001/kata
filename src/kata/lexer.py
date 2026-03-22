@@ -81,11 +81,6 @@ class Lexer:
                 self._read_block_body()
                 continue
 
-            if ch == ":":
-                self._emit(TokenKind.Colon, ":")
-                self._advance()
-                continue
-
             if ch == ",":
                 self._emit(TokenKind.Comma, ",")
                 self._advance()
