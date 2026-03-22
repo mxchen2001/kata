@@ -59,6 +59,7 @@ class ConstraintDirective:
     span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
 
 
+# TODO: ChainStep/ChainDirective are AST-only — not yet wired into lexer, parser, or compiler.
 @dataclass
 class ChainStep:
     name: str = ""
