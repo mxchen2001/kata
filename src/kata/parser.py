@@ -12,6 +12,8 @@ from .ast import (
     OutputDirective,
     ConstraintDirective,
     FnDirective,
+    RetryDirective,
+    ImportDirective,
     CallDirective,
     Span,
     Position,
@@ -63,8 +65,12 @@ class Parser:
                 return self._parse_output(at_token)
             case "constraint":
                 return self._parse_constraint(at_token)
+            case "retry":
+                return self._parse_retry(at_token)
             case "fn":
                 return self._parse_fn(at_token)
+            case "import":
+                return self._parse_import(at_token)
             case "call":
                 return self._parse_call(at_token)
             case _:
@@ -84,6 +90,13 @@ class Parser:
 
     def _parse_context(self, at: Token) -> ContextDirective:
         body = self._read_inline_or_block()
+        # Check for "file: <path>" syntax
+        if body.startswith("file:"):
+            file_path = body[len("file:"):].strip()
+            return ContextDirective(file=file_path, span=self._make_span(at, self._previous()))
+        # Check for "stdin" keyword
+        if body.strip() == "stdin":
+            return ContextDirective(body="__stdin__", span=self._make_span(at, self._previous()))
         return ContextDirective(body=body, span=self._make_span(at, self._previous()))
 
     def _parse_task(self, at: Token) -> TaskDirective:
@@ -114,6 +127,14 @@ class Parser:
         body = self._read_inline_or_block()
         return ConstraintDirective(body=body, span=self._make_span(at, self._previous()))
 
+    def _parse_retry(self, at: Token) -> RetryDirective:
+        text = self._read_inline_or_block().strip()
+        try:
+            count = int(text)
+        except ValueError:
+            count = 3
+        return RetryDirective(count=count, span=self._make_span(at, self._previous()))
+
     def _parse_fn(self, at: Token) -> FnDirective:
         name_token = self._expect(TokenKind.Identifier)
         params = self._parse_param_list()
@@ -127,6 +148,10 @@ class Parser:
             body=body_token.value,
             span=self._make_span(at, self._previous()),
         )
+
+    def _parse_import(self, at: Token) -> ImportDirective:
+        path = self._read_inline_or_block()
+        return ImportDirective(path=path, span=self._make_span(at, self._previous()))
 
     def _parse_call(self, at: Token) -> CallDirective:
         name_token = self._expect(TokenKind.Identifier)

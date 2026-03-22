@@ -1,15 +1,18 @@
 """Tests for the Kata compiler."""
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from .lexer import Lexer
 from .parser import Parser
 from .compiler import Compiler, ExecutionPlan
 
 
-def compile_source(source: str) -> ExecutionPlan:
+def compile_source(source: str, base_path: Path | None = None) -> ExecutionPlan:
     tokens = Lexer(source).tokenize()
     ast = Parser(tokens).parse()
-    return Compiler().compile(ast)
+    return Compiler(base_path=base_path).compile(ast)
 
 
 class TestCompiler(unittest.TestCase):
@@ -141,6 +144,131 @@ class TestOptimization(unittest.TestCase):
         plan = compile_source(source)
         self.assertEqual(len(plan.steps), 1)
         self.assertEqual(plan.steps[0].user, "Do something.")
+
+
+class TestContextFile(unittest.TestCase):
+    def test_context_file_single(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "data.txt").write_text("hello world")
+            source = """
+@model gpt-4o
+@context file: data.txt
+@task Summarize.
+"""
+            plan = compile_source(source, base_path=Path(tmpdir))
+            self.assertIn("hello world", plan.steps[0].system or "")
+            self.assertIn("[data.txt]", plan.steps[0].system or "")
+
+    def test_context_file_glob(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "a.py").write_text("def a(): pass")
+            (Path(tmpdir) / "b.py").write_text("def b(): pass")
+            (Path(tmpdir) / "c.txt").write_text("ignore me")
+            source = """
+@model gpt-4o
+@context file: *.py
+@task Review.
+"""
+            plan = compile_source(source, base_path=Path(tmpdir))
+            system = plan.steps[0].system or ""
+            self.assertIn("def a(): pass", system)
+            self.assertIn("def b(): pass", system)
+            self.assertNotIn("ignore me", system)
+
+    def test_context_file_missing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = """
+@model gpt-4o
+@context file: missing.txt
+@task Summarize.
+"""
+            plan = compile_source(source, base_path=Path(tmpdir))
+            self.assertIn("file not found", plan.steps[0].system or "")
+
+
+class TestRetry(unittest.TestCase):
+    def test_retry_directive(self):
+        source = """
+@model gpt-4o
+@task Do something.
+@retry 5
+"""
+        plan = compile_source(source)
+        self.assertEqual(plan.steps[0].retries, 5)
+
+    def test_retry_in_serialization(self):
+        source = """
+@model gpt-4o
+@task Do something.
+@retry 3
+"""
+        plan = compile_source(source)
+        d = plan.to_dict()
+        self.assertEqual(d["plan"][0]["retries"], 3)
+
+    def test_no_retry_default(self):
+        source = """
+@model gpt-4o
+@task Do something.
+"""
+        plan = compile_source(source)
+        self.assertEqual(plan.steps[0].retries, 0)
+        self.assertNotIn("retries", plan.to_dict()["plan"][0])
+
+
+class TestImport(unittest.TestCase):
+    def test_import_fn_from_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lib = Path(tmpdir) / "lib.kata"
+            lib.write_text("""
+@fn greet(name) {
+  @task Say hello to ${name}.
+}
+""")
+            source = """
+@import lib
+@model gpt-4o
+@call greet(World)
+"""
+            plan = compile_source(source, base_path=Path(tmpdir))
+            self.assertEqual(len(plan.steps), 1)
+            self.assertIn("Say hello to World.", plan.steps[0].user)
+
+    def test_import_with_extension(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lib = Path(tmpdir) / "helpers.kata"
+            lib.write_text("""
+@fn add_role {
+  @role You are a helpful assistant.
+}
+""")
+            source = """
+@import helpers.kata
+@model gpt-4o
+@call add_role
+@task Do something.
+"""
+            plan = compile_source(source, base_path=Path(tmpdir))
+            self.assertEqual(plan.steps[0].system, "You are a helpful assistant.")
+
+    def test_local_fn_overrides_import(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lib = Path(tmpdir) / "lib.kata"
+            lib.write_text("""
+@fn greet {
+  @task Imported hello.
+}
+""")
+            source = """
+@import lib
+@fn greet {
+  @task Local hello.
+}
+@model gpt-4o
+@call greet
+"""
+            plan = compile_source(source, base_path=Path(tmpdir))
+            self.assertIn("Local hello.", plan.steps[0].user)
 
 
 if __name__ == "__main__":

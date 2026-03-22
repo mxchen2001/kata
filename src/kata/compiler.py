@@ -1,9 +1,11 @@
 """Compiler for the Kata language — AST → execution plan."""
 
 from __future__ import annotations
+import glob as globmod
 import re
 from dataclasses import dataclass, field
-from .ast import Program, DirectiveNode, FnDirective, TaskDirective
+from pathlib import Path
+from .ast import Program, DirectiveNode, FnDirective, ImportDirective, TaskDirective
 from .lexer import Lexer
 from .parser import Parser
 from .roles import expand_role
@@ -21,6 +23,7 @@ class Step:
     constraints: list[str] = field(default_factory=list)
     output: dict[str, str] = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)
+    retries: int = 0
 
     def to_dict(self) -> dict:
         d: dict = {"id": self.id}
@@ -35,6 +38,8 @@ class Step:
             d["output"] = self.output
         if self.depends_on:
             d["depends_on"] = self.depends_on
+        if self.retries:
+            d["retries"] = self.retries
         return d
 
 
@@ -57,8 +62,20 @@ class Compiler:
     Sequential calls create dependency chains.
     """
 
+    def __init__(self, *, base_path: Path | None = None) -> None:
+        self._base_path = base_path or Path(".")
+
     def compile(self, program: Program) -> ExecutionPlan:
         fns: dict[str, FnDirective] = {}
+
+        # Resolve @import directives — pull in @fn defs from other files
+        for d in program.directives:
+            if d.kind == "import":
+                assert isinstance(d, ImportDirective)
+                imported_fns = self._resolve_import(d.path)
+                for fn in imported_fns:
+                    fns[fn.name] = fn
+
         for d in program.directives:
             if d.kind == "fn":
                 assert isinstance(d, FnDirective)
@@ -80,6 +97,16 @@ class Compiler:
 
         plan = self._optimize(plan)
         return plan
+
+    def _resolve_import(self, path: str) -> list[FnDirective]:
+        """Load a .kata file and extract its @fn definitions."""
+        file_path = self._base_path / path
+        if not file_path.suffix:
+            file_path = file_path.with_suffix(".kata")
+        source = file_path.read_text(encoding="utf-8")
+        tokens = Lexer(source).tokenize()
+        ast = Parser(tokens).parse()
+        return [d for d in ast.directives if d.kind == "fn"]
 
     def _expand_calls(
         self,
@@ -225,15 +252,42 @@ class Compiler:
         user_parts: list[str] = []
         constraints: list[str] = []
         output: dict[str, str] = {}
+        retries: int = 0
 
         for d in directives:
             match d.kind:
                 case "model":
                     model = d.value  # type: ignore[union-attr]
+                case "retry":
+                    retries = d.count  # type: ignore[union-attr]
                 case "role":
                     system_parts.append(expand_role(d.value))  # type: ignore[union-attr]
                 case "context":
-                    system_parts.append(d.body)  # type: ignore[union-attr]
+                    if d.file:  # type: ignore[union-attr]
+                        pattern = d.file  # type: ignore[union-attr]
+                        if any(c in pattern for c in ("*", "?", "[")):
+                            # Glob pattern
+                            matches = sorted(globmod.glob(str(self._base_path / pattern)))
+                            for match in matches:
+                                p = Path(match)
+                                if p.is_file():
+                                    content = p.read_text(encoding="utf-8")
+                                    system_parts.append(f"[{p.name}]\n{content}")
+                            if not matches:
+                                system_parts.append(f"[{pattern} — no files matched]")
+                        else:
+                            file_path = self._base_path / pattern
+                            if file_path.is_file():
+                                content = file_path.read_text(encoding="utf-8")
+                                system_parts.append(f"[{pattern}]\n{content}")
+                            else:
+                                system_parts.append(f"[{pattern} — file not found]")
+                    elif d.body == "__stdin__":  # type: ignore[union-attr]
+                        import sys as _sys
+                        if not _sys.stdin.isatty():
+                            system_parts.append(_sys.stdin.read())
+                    else:
+                        system_parts.append(d.body)  # type: ignore[union-attr]
                 case "task":
                     user_parts.append(d.body)  # type: ignore[union-attr]
                 case "constraint":
@@ -248,6 +302,7 @@ class Compiler:
             user="\n\n".join(user_parts),
             constraints=constraints,
             output=output,
+            retries=retries,
         )
 
     # -- Optimization passes --------------------------------------------------

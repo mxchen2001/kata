@@ -10,6 +10,8 @@ Severity = Literal["error", "warning"]
 
 _SINGULAR_DIRECTIVES = {"model", "role"}
 
+_KNOWN_MODEL_PREFIXES = ("gpt-", "o1", "o3", "o4", "claude-")
+
 
 @dataclass
 class Diagnostic:
@@ -41,6 +43,16 @@ def diagnose(program: Program) -> list[Diagnostic]:
                     d.span,
                 ))
 
+    # Validate model names
+    for d in counts.get("model", []):
+        model_val = d.value  # type: ignore[union-attr]
+        if model_val and not model_val.startswith(_KNOWN_MODEL_PREFIXES):
+            ds.append(Diagnostic(
+                "warning",
+                f"Unknown model '{model_val}' — expected gpt-*, o1/o3/o4-*, or claude-*",
+                d.span,
+            ))
+
     # Required: @model (unless @call directives provide one)
     if "model" not in counts and "call" not in counts:
         ds.append(Diagnostic(
@@ -61,7 +73,7 @@ def diagnose(program: Program) -> list[Diagnostic]:
     for d in program.directives:
         if d.kind == "role" and not d.value.strip():  # type: ignore[union-attr]
             ds.append(Diagnostic("warning", "@role has an empty body", d.span))
-        if d.kind == "context" and not d.body.strip():  # type: ignore[union-attr]
+        if d.kind == "context" and not d.body.strip() and not d.file:  # type: ignore[union-attr]
             ds.append(Diagnostic("warning", "@context has an empty body", d.span))
         if d.kind == "task" and not d.body.strip():  # type: ignore[union-attr]
             ds.append(Diagnostic("warning", "@task has an empty body", d.span))

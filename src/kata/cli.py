@@ -93,7 +93,7 @@ def cmd_compile(args: argparse.Namespace) -> None:
     if _check(args.file, ast):
         sys.exit(1)
 
-    compiler = Compiler()
+    compiler = Compiler(base_path=Path(args.file).parent)
     plan = compiler.compile(ast)
 
     if args.output:
@@ -118,27 +118,38 @@ def cmd_parse(args: argparse.Namespace) -> None:
     _emit(json.dumps(dataclasses.asdict(ast), indent=2), args.output)
 
 
-def cmd_run(args: argparse.Namespace) -> None:
-    _load_dotenv()
+def _expected_outputs(file_path: str, outdir: Path) -> list[str]:
+    """Return list of output filenames a .kata file would produce."""
+    if file_path.endswith(".json"):
+        return []
+    _, _, ast = _safe_parse(file_path)
+    plan = Compiler(base_path=outdir).compile(ast)
+    filenames: list[str] = []
+    for i, step in enumerate(plan.steps):
+        fname = _artifact_filename(step, i + 1)
+        if fname:
+            filenames.append(fname)
+    return filenames
 
-    file_path: str = args.file
+
+def _run_file(file_path: str, outdir: Path, engine: Engine) -> list[str]:
+    """Run a single .kata or .json file and write outputs. Returns list of written filenames."""
     if file_path.endswith(".json"):
         plan = load_plan(Path(file_path))
     else:
         _, _, ast = _safe_parse(file_path)
         if _check(file_path, ast):
             sys.exit(1)
-        plan = Compiler().compile(ast)
+        plan = Compiler(base_path=outdir).compile(ast)
 
-    engine = Engine(verbose=True)
     artifact = engine.run(plan)
 
-    # Determine output directory
-    stem = Path(file_path).stem
-    outdir = Path(args.outdir) if args.outdir else Path("output") / stem
+    if engine._dry_run:
+        return []
+
     outdir.mkdir(parents=True, exist_ok=True)
 
-    # Write full run artifact (for decompilation / inspection)
+    # Write full run artifact
     run_path = outdir / "run.json"
     run_path.write_text(
         json.dumps(artifact.to_dict(), indent=2), encoding="utf-8"
@@ -158,9 +169,10 @@ def cmd_run(args: argparse.Namespace) -> None:
             written.append(fname)
 
     # Print results to stdout
-    for r in artifact.results:
-        print(f"\n--- {r.step_id} ({r.model}) ---")
-        print(r.output)
+    if not engine._stream:
+        for r in artifact.results:
+            print(f"\n--- {r.step_id} ({r.model}) ---")
+            print(r.output)
 
     # Summary
     print(f"\n{'─' * 40}")
@@ -168,6 +180,67 @@ def cmd_run(args: argparse.Namespace) -> None:
     print(f"  run.json")
     for w in written:
         print(f"  {w}")
+
+    # Token usage summary
+    total = artifact.total_usage
+    if total.input_tokens or total.output_tokens:
+        print(f"\nTokens: {total.input_tokens} in / {total.output_tokens} out / {total.input_tokens + total.output_tokens} total")
+
+    return written
+
+
+def cmd_run(args: argparse.Namespace) -> None:
+    _load_dotenv()
+    file_path: str = args.file
+    stem = Path(file_path).stem
+    outdir = Path(args.outdir) if args.outdir else Path("output") / stem
+    engine = Engine(
+        verbose=True,
+        dry_run=getattr(args, "dry_run", False),
+        stream=getattr(args, "stream", False),
+    )
+    _run_file(file_path, outdir, engine)
+
+
+def cmd_exec(args: argparse.Namespace) -> None:
+    """Run all .kata files in a directory in sorted order.
+
+    All files share a single output directory so that later files can
+    reference outputs from earlier ones via @context file: <path>.
+    """
+    _load_dotenv()
+
+    source_dir = Path(args.dir)
+    if not source_dir.is_dir():
+        print(f"Not a directory: {source_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    kata_files = sorted(source_dir.glob("*.kata"))
+    if not kata_files:
+        print(f"No .kata files found in {source_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    outdir = Path(args.outdir) if args.outdir else Path("output") / source_dir.name
+    outdir.mkdir(parents=True, exist_ok=True)
+    resume = getattr(args, "resume", False)
+    engine = Engine(
+        verbose=True,
+        dry_run=getattr(args, "dry_run", False),
+        stream=getattr(args, "stream", False),
+    )
+
+    for kata_file in kata_files:
+        # --resume: skip files whose outputs already exist
+        if resume:
+            expected = _expected_outputs(str(kata_file), outdir)
+            if expected and all((outdir / f).is_file() for f in expected):
+                print(f"\n  {kata_file.name} — skipped (outputs exist)")
+                continue
+
+        print(f"\n{'═' * 40}")
+        print(f"  {kata_file.name}")
+        print(f"{'═' * 40}")
+        _run_file(str(kata_file), outdir, engine)
 
 
 def cmd_decompile(args: argparse.Namespace) -> None:
@@ -204,7 +277,18 @@ def main() -> None:
     p_run = sub.add_parser("run", aliases=["r"], help="Execute a .kata file or compiled .json plan")
     p_run.add_argument("file", help="Path to .kata or .json plan file")
     p_run.add_argument("-d", "--outdir", help="Output directory (default: output/<name>/)")
+    p_run.add_argument("--dry-run", action="store_true", help="Show prompts without calling APIs")
+    p_run.add_argument("--stream", action="store_true", help="Stream LLM output as it arrives")
     p_run.set_defaults(func=cmd_run)
+
+    # exec
+    p_exec = sub.add_parser("exec", aliases=["e"], help="Run all .kata files in a directory in order")
+    p_exec.add_argument("dir", help="Directory containing .kata files")
+    p_exec.add_argument("-d", "--outdir", help="Shared output directory (default: output/<dirname>/)")
+    p_exec.add_argument("--dry-run", action="store_true", help="Show prompts without calling APIs")
+    p_exec.add_argument("--stream", action="store_true", help="Stream LLM output as it arrives")
+    p_exec.add_argument("--resume", action="store_true", help="Skip files whose outputs already exist")
+    p_exec.set_defaults(func=cmd_exec)
 
     # decompile
     p_decompile = sub.add_parser("decompile", aliases=["d"], help="Read plan JSON from stdin, output .kata source")

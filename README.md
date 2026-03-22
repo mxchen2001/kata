@@ -24,19 +24,26 @@ Most engineers today don't read assembly — they write in high-level languages 
 |---|---|
 | `@model` | Target model (e.g. `claude-sonnet-4-6`, `gpt-4o`) |
 | `@role` | System prompt — supports presets like `:coder`, `:tester`, `:reviewer` |
-| `@context` | Additional context block |
+| `@context` | Additional context — inline block, `file: path`, `file: *.py` (glob), or `stdin` |
 | `@task` | The user prompt |
 | `@constraint` | Rules the model must follow |
 | `@output` | Output format/filename |
 | `@fn` / `@call` | Reusable parameterized functions |
+| `@import` | Import `@fn` definitions from another `.kata` file |
+| `@retry` | Retry a step N times on failure (e.g. `@retry 3`) |
 
 ## Usage
 
 ```sh
-kata compile example.kata        # show execution plan
-kata check example.kata          # validate syntax
-kata run example.kata             # execute against LLM APIs
-kata decompile < plan.json       # reverse a plan back to .kata source
+kata compile example.kata          # show execution plan
+kata check example.kata            # validate syntax
+kata run example.kata              # execute against LLM APIs
+kata run --dry-run example.kata    # show prompts without calling APIs
+kata run --stream example.kata     # stream output as it arrives
+kata exec examples/orchestrator    # run all .kata files in a directory
+kata exec --resume examples/orchestrator  # skip files with existing outputs
+cat code.py | kata run review.kata # pipe input via @context stdin
+kata decompile < plan.json         # reverse a plan back to .kata source
 ```
 
 ## Install

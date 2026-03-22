@@ -35,6 +35,7 @@ class RoleDirective:
 class ContextDirective:
     kind: str = field(default="context", init=False)
     body: str = ""
+    file: str | None = None  # @context file: <path> — inline file contents at compile time
     span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
 
 
@@ -84,6 +85,20 @@ class FnDirective:
 
 
 @dataclass
+class RetryDirective:
+    kind: str = field(default="retry", init=False)
+    count: int = 3
+    span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
+
+
+@dataclass
+class ImportDirective:
+    kind: str = field(default="import", init=False)
+    path: str = ""
+    span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
+
+
+@dataclass
 class CallDirective:
     kind: str = field(default="call", init=False)
     name: str = ""
@@ -100,6 +115,8 @@ DirectiveNode = Union[
     ConstraintDirective,
     ChainDirective,
     FnDirective,
+    RetryDirective,
+    ImportDirective,
     CallDirective,
 ]
 

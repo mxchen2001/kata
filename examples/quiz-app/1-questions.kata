@@ -1,0 +1,21 @@
+# Generate quiz questions as structured JSON
+
+@model gpt-4o
+
+@role You are a friendly science teacher for middle schoolers.
+
+@task {
+  Create 10 multiple choice questions about the solar system.
+  Return a JSON array where each object has:
+  - "question": the question text
+  - "options": array of 4 strings (A through D)
+  - "answer": index of the correct option (0-3)
+  - "explanation": one sentence explaining the answer
+
+  Only output the JSON, no markdown fences.
+}
+
+@constraint Mix easy and hard questions.
+@constraint Avoid trick questions.
+
+@output format: json, file: questions.json

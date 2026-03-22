@@ -1,0 +1,23 @@
+# Generate tests for the quiz app
+
+@model gpt-4o
+
+@role :tester
+
+@context file: quiz.py
+@context file: questions.json
+
+@task {
+  Write pytest tests for the quiz app. Cover:
+  - Loading questions from JSON
+  - Validating question format (has question, 4 options, valid answer index)
+  - Scoring logic (correct and incorrect answers)
+  - Handling invalid input gracefully
+
+  Only output the code.
+}
+
+@constraint Use monkeypatch or mock for user input.
+@constraint Each test should be independent.
+
+@output format: python, file: test_quiz.py

@@ -1,0 +1,23 @@
+# Generate a Python CLI quiz app that loads the questions
+
+@model gpt-4o
+
+@role :coder(Python)
+
+@context file: questions.json
+
+@task {
+  Write a Python CLI quiz app that:
+  1. Loads questions from questions.json
+  2. Asks each question one at a time, showing the options
+  3. Accepts user input (A/B/C/D)
+  4. Shows if they're right or wrong, with the explanation
+  5. Tracks score and prints the final result at the end
+
+  Only output the code.
+}
+
+@constraint Use only the standard library.
+@constraint Keep it under 80 lines.
+
+@output format: python, file: quiz.py

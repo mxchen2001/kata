@@ -6,7 +6,8 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .compiler import ExecutionPlan, Step
@@ -21,14 +22,28 @@ def _strip_code_fence(text: str) -> str:
 
 
 @dataclass
+class TokenUsage:
+    """Token usage for a single step."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    def to_dict(self) -> dict:
+        return {"input_tokens": self.input_tokens, "output_tokens": self.output_tokens}
+
+
+@dataclass
 class StepResult:
     """Result of executing a single step."""
     step_id: str
     model: str
     output: str
+    usage: TokenUsage | None = None
 
     def to_dict(self) -> dict:
-        return {"step_id": self.step_id, "model": self.model, "output": self.output}
+        d = {"step_id": self.step_id, "model": self.model, "output": self.output}
+        if self.usage:
+            d["usage"] = self.usage.to_dict()
+        return d
 
 
 @dataclass
@@ -40,6 +55,7 @@ class RunArtifact:
     """
     plan: ExecutionPlan
     outputs: dict[str, str]  # step_id → LLM response text
+    usage: dict[str, TokenUsage] = field(default_factory=dict)  # step_id → token usage
 
     def to_dict(self) -> dict:
         steps = []
@@ -47,15 +63,30 @@ class RunArtifact:
             d = step.to_dict()
             if step.id in self.outputs:
                 d["result"] = self.outputs[step.id]
+            if step.id in self.usage:
+                d["usage"] = self.usage[step.id].to_dict()
             steps.append(d)
         return {"plan": steps}
 
     @property
     def results(self) -> list[StepResult]:
         return [
-            StepResult(step.id, step.model or "unknown", self.outputs.get(step.id, ""))
+            StepResult(
+                step.id,
+                step.model or "unknown",
+                self.outputs.get(step.id, ""),
+                self.usage.get(step.id),
+            )
             for step in self.plan.steps
         ]
+
+    @property
+    def total_usage(self) -> TokenUsage:
+        total = TokenUsage()
+        for u in self.usage.values():
+            total.input_tokens += u.input_tokens
+            total.output_tokens += u.output_tokens
+        return total
 
 
 def load_plan(source: dict | str | Path) -> ExecutionPlan:
@@ -120,10 +151,12 @@ def _is_anthropic_model(model: str) -> bool:
 class Engine:
     """Executes a Kata execution plan by calling LLM APIs."""
 
-    def __init__(self, verbose: bool = False) -> None:
+    def __init__(self, verbose: bool = False, dry_run: bool = False, stream: bool = False) -> None:
         self._openai_client = None
         self._anthropic_client = None
         self._verbose = verbose
+        self._dry_run = dry_run
+        self._stream = stream
 
     # -- lazy client init (only created when needed) -----------------------
 
@@ -150,6 +183,7 @@ class Engine:
     def run(self, plan: ExecutionPlan) -> RunArtifact:
         """Execute all steps in dependency order, return a full artifact."""
         outputs: dict[str, str] = {}
+        usage: dict[str, TokenUsage] = {}
 
         for step in plan.steps:
             # Chain dependencies are prepended as context;
@@ -165,18 +199,34 @@ class Engine:
                 deps = f" <- {', '.join(step.depends_on)}" if step.depends_on else ""
                 print(f">> {step.id} ({tag}){deps}", file=sys.stderr)
 
-            result = self._execute_step(step, context, outputs)
-            if step.output.get("format"):
-                result = _strip_code_fence(result)
-            outputs[step.id] = result
+            max_attempts = max(1, step.retries + 1) if step.retries else 1
+            last_error: Exception | None = None
 
-        return RunArtifact(plan=plan, outputs=outputs)
+            for attempt in range(max_attempts):
+                try:
+                    if attempt > 0 and self._verbose:
+                        print(f"   retry {attempt}/{step.retries}", file=sys.stderr)
+                        time.sleep(min(2 ** attempt, 10))
+                    result, step_usage = self._execute_step(step, context, outputs)
+                    if step.output.get("format"):
+                        result = _strip_code_fence(result)
+                    outputs[step.id] = result
+                    if step_usage:
+                        usage[step.id] = step_usage
+                    last_error = None
+                    break
+                except Exception as e:
+                    last_error = e
 
-    def _execute_step(
+            if last_error is not None:
+                raise last_error
+
+        return RunArtifact(plan=plan, outputs=outputs, usage=usage)
+
+    def _build_messages(
         self, step: Step, context: list[str], all_outputs: dict[str, str] | None = None,
-    ) -> str:
-        """Build messages and dispatch to the right provider."""
-        # System: role/context + constraints
+    ) -> tuple[str | None, str]:
+        """Assemble system and user prompts for a step."""
         system_parts: list[str] = []
         if step.system:
             system_parts.append(step.system)
@@ -186,13 +236,11 @@ class Engine:
             )
         system = "\n\n".join(system_parts) if system_parts else None
 
-        # User: prior outputs + task + output format
         user_parts: list[str] = []
         if context:
             user_parts.extend(context)
         if step.user:
             user_text = step.user
-            # Resolve inline {{ref:step_id}} markers with actual outputs
             if all_outputs and "{{ref:" in user_text:
                 for ref_id, ref_output in all_outputs.items():
                     user_text = user_text.replace(f"{{{{ref:{ref_id}}}}}", ref_output)
@@ -202,7 +250,23 @@ class Engine:
             user_parts.append(f"Output format: {fmt}")
         user = "\n\n".join(user_parts)
 
+        return system, user
+
+    def _execute_step(
+        self, step: Step, context: list[str], all_outputs: dict[str, str] | None = None,
+    ) -> tuple[str, TokenUsage | None]:
+        """Build messages and dispatch to the right provider."""
+        system, user = self._build_messages(step, context, all_outputs)
         model = step.model or "gpt-4o"
+
+        if self._dry_run:
+            parts = [f"── {step.id} ({model}) ──"]
+            if system:
+                parts.append(f"[system]\n{system}")
+            parts.append(f"[user]\n{user}")
+            print("\n".join(parts))
+            print()
+            return "", None
 
         if _is_anthropic_model(model):
             return self._call_anthropic(model, system, user)
@@ -216,16 +280,35 @@ class Engine:
 
     # -- provider calls ----------------------------------------------------
 
-    def _call_openai(self, model: str, system: str | None, user: str) -> str:
+    def _call_openai(self, model: str, system: str | None, user: str) -> tuple[str, TokenUsage | None]:
         client = self._get_openai()
         messages: list[dict] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": user})
-        response = client.chat.completions.create(model=model, messages=messages)
-        return response.choices[0].message.content or ""
 
-    def _call_anthropic(self, model: str, system: str | None, user: str) -> str:
+        if self._stream:
+            chunks: list[str] = []
+            stream = client.chat.completions.create(model=model, messages=messages, stream=True)
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    sys.stdout.write(delta.content)
+                    sys.stdout.flush()
+                    chunks.append(delta.content)
+            sys.stdout.write("\n")
+            return "".join(chunks), None
+
+        response = client.chat.completions.create(model=model, messages=messages)
+        usage = None
+        if response.usage:
+            usage = TokenUsage(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+            )
+        return response.choices[0].message.content or "", usage
+
+    def _call_anthropic(self, model: str, system: str | None, user: str) -> tuple[str, TokenUsage | None]:
         client = self._get_anthropic()
         kwargs: dict = {
             "model": model,
@@ -234,5 +317,25 @@ class Engine:
         }
         if system:
             kwargs["system"] = system
+
+        if self._stream:
+            chunks: list[str] = []
+            with client.messages.stream(**kwargs) as stream:
+                for text in stream.text_stream:
+                    sys.stdout.write(text)
+                    sys.stdout.flush()
+                    chunks.append(text)
+            sys.stdout.write("\n")
+            response = stream.get_final_message()
+            usage = TokenUsage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+            )
+            return "".join(chunks), usage
+
         response = client.messages.create(**kwargs)
-        return response.content[0].text
+        usage = TokenUsage(
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
+        return response.content[0].text, usage
