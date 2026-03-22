@@ -2,7 +2,7 @@
 
 @model gpt-4o
 
-@role You are a senior TypeScript engineer.
+@role :coder(TypeScript)
 
 @context {
   The codebase uses React 18, Tailwind, and Zustand.

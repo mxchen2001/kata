@@ -2,7 +2,7 @@
 
 @model claude-sonnet-4-6
 
-@role You are a research assistant skilled at distilling complex material.
+@role :summarizer
 
 @task {
   Summarize the provided document.

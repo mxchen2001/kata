@@ -1,0 +1,15 @@
+# Functions must form a tree, not cycles — this should fail compilation
+
+@fn ping() {
+  @model claude-sonnet-4-6
+  @task Say ping.
+  @call pong()
+}
+
+@fn pong() {
+  @model claude-sonnet-4-6
+  @task Say pong.
+  @call ping()
+}
+
+@call ping()

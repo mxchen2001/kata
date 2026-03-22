@@ -84,13 +84,17 @@ def diagnose(program: Program) -> list[Diagnostic]:
         ))
 
     # Nested directive leak (skip @fn bodies which are expected to have directives)
+    # @call inside @task is valid (inline calls), so exempt it
     for d in program.directives:
         if d.kind == "fn":
             continue
         body = _get_body(d)
         if body is None:
             continue
-        m = re.search(r"^[ \t]*@(\w+)", body, re.MULTILINE)
+        if d.kind == "task":
+            m = re.search(r"^[ \t]*@(?!call\b)(\w+)", body, re.MULTILINE)
+        else:
+            m = re.search(r"^[ \t]*@(\w+)", body, re.MULTILINE)
         if m:
             ds.append(Diagnostic(
                 "warning",
@@ -138,6 +142,23 @@ def diagnose(program: Program) -> list[Diagnostic]:
                             d.span,
                         ))
 
+    # Recursive call cycles
+    call_graph: dict[str, set[str]] = {}
+    for name, nodes in fn_defs.items():
+        fn = nodes[0]
+        calls_in_body = set(re.findall(r"@call\s+(\w+)", fn.body))  # type: ignore[union-attr]
+        call_graph[name] = calls_in_body & fn_defs.keys()
+
+    cycle = _find_cycle(call_graph)
+    if cycle:
+        cycle_str = " → ".join(cycle)
+        first_fn = fn_defs[cycle[0]][0]
+        ds.append(Diagnostic(
+            "error",
+            f"Recursive call cycle: {cycle_str}",
+            first_fn.span,
+        ))
+
     # Unused functions
     called_names = {d.name for d in program.directives if d.kind == "call"}  # type: ignore[union-attr]
     for name, nodes in fn_defs.items():
@@ -149,6 +170,34 @@ def diagnose(program: Program) -> list[Diagnostic]:
             ))
 
     return ds
+
+
+def _find_cycle(graph: dict[str, set[str]]) -> list[str] | None:
+    """Return a cycle as [a, b, ..., a] or None if acyclic."""
+    visited: set[str] = set()
+    on_path: set[str] = set()
+
+    def dfs(node: str, trail: list[str]) -> list[str] | None:
+        if node in on_path:
+            return trail[trail.index(node):] + [node]
+        if node in visited:
+            return None
+        visited.add(node)
+        on_path.add(node)
+        trail.append(node)
+        for neighbor in sorted(graph.get(node, set())):
+            result = dfs(neighbor, trail)
+            if result:
+                return result
+        on_path.remove(node)
+        trail.pop()
+        return None
+
+    for node in sorted(graph):
+        result = dfs(node, [])
+        if result:
+            return result
+    return None
 
 
 def _get_body(d: DirectiveNode) -> str | None:

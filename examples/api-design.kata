@@ -2,7 +2,7 @@
 
 @model claude-opus-4-6
 
-@role You are a senior API architect.
+@role :architect(API)
 
 @context {
   Stack: Node.js, Express, PostgreSQL, Redis

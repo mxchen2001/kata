@@ -2,7 +2,7 @@
 
 @model gpt-4o
 
-@role You are a test engineer who writes thorough, readable tests.
+@role :tester
 
 @context {
   Testing framework: vitest

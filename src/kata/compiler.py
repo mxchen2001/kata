@@ -1,10 +1,14 @@
 """Compiler for the Kata language — AST → execution plan."""
 
 from __future__ import annotations
+import re
 from dataclasses import dataclass, field
-from .ast import Program, DirectiveNode, FnDirective
+from .ast import Program, DirectiveNode, FnDirective, TaskDirective
 from .lexer import Lexer
 from .parser import Parser
+from .roles import expand_role
+
+_INLINE_CALL_RE = re.compile(r"@call\s+(\w+)(?:\(([^)]*)\))?")
 
 
 @dataclass
@@ -61,7 +65,19 @@ class Compiler:
                 fns[d.name] = d
 
         expanded = self._expand_calls(program.directives, fns)
+        ref_steps, expanded = self._resolve_inline_calls(expanded, fns)
         plan = self._build_plan(expanded)
+
+        if ref_steps:
+            # Wire dependencies: main steps that use {{ref:...}} depend on ref steps
+            for step in plan.steps:
+                for ref in ref_steps:
+                    marker = f"{{{{ref:{ref.id}}}}}"
+                    if marker in step.user:
+                        if ref.id not in step.depends_on:
+                            step.depends_on.append(ref.id)
+            plan.steps = ref_steps + plan.steps
+
         plan = self._optimize(plan)
         return plan
 
@@ -69,17 +85,27 @@ class Compiler:
         self,
         directives: list[DirectiveNode],
         fns: dict[str, FnDirective],
+        _expanding: frozenset[str] | None = None,
     ) -> list[DirectiveNode]:
+        if _expanding is None:
+            _expanding = frozenset()
+
         result: list[DirectiveNode] = []
 
         for d in directives:
             if d.kind == "fn":
                 continue
             if d.kind == "call":
-                fn = fns.get(d.name)  # type: ignore[union-attr]
+                fn_name: str = d.name  # type: ignore[union-attr]
+                if fn_name in _expanding:
+                    raise RuntimeError(
+                        f"Recursive call cycle detected: @{fn_name} "
+                        f"at {d.span.start.line}:{d.span.start.column}"  # type: ignore[union-attr]
+                    )
+                fn = fns.get(fn_name)
                 if fn is None:
                     raise RuntimeError(
-                        f"Undefined function @{d.name} at {d.span.start.line}:{d.span.start.column}"  # type: ignore[union-attr]
+                        f"Undefined function @{fn_name} at {d.span.start.line}:{d.span.start.column}"  # type: ignore[union-attr]
                     )
                 body = fn.body
                 for i, param in enumerate(fn.params):
@@ -88,12 +114,67 @@ class Compiler:
                     body = body.replace(placeholder, value)
                 inner_tokens = Lexer(body).tokenize()
                 inner_ast = Parser(inner_tokens).parse()
-                inner_expanded = self._expand_calls(inner_ast.directives, fns)
+                inner_expanded = self._expand_calls(
+                    inner_ast.directives, fns, _expanding | {fn_name}
+                )
                 result.extend(inner_expanded)
             else:
                 result.append(d)
 
         return result
+
+    def _resolve_inline_calls(
+        self,
+        directives: list[DirectiveNode],
+        fns: dict[str, FnDirective],
+    ) -> tuple[list[Step], list[DirectiveNode]]:
+        """Resolve @call references inside @task bodies.
+
+        Each inline @call is compiled into ref steps that run first.
+        The @call text is replaced with {{ref:ref_N}} which the engine
+        resolves at runtime with the step's actual output.
+        """
+        ref_steps: list[Step] = []
+        modified: list[DirectiveNode] = []
+
+        for d in directives:
+            if d.kind == "task" and "@call" in d.body:  # type: ignore[union-attr]
+                new_body: str = d.body  # type: ignore[union-attr]
+                for match in _INLINE_CALL_RE.finditer(new_body):
+                    fn_name = match.group(1)
+                    args_str = match.group(2) or ""
+                    args = [a.strip() for a in args_str.split(",") if a.strip()] if args_str.strip() else []
+
+                    fn = fns.get(fn_name)
+                    if fn is None:
+                        raise RuntimeError(f"Undefined function @{fn_name} in inline @call")
+
+                    # Expand function body with args
+                    fn_body = fn.body
+                    for i, param in enumerate(fn.params):
+                        fn_body = fn_body.replace(f"${{{param}}}", args[i] if i < len(args) else "")
+
+                    # Compile into steps
+                    inner_tokens = Lexer(fn_body).tokenize()
+                    inner_ast = Parser(inner_tokens).parse()
+                    inner_expanded = self._expand_calls(inner_ast.directives, fns)
+
+                    inner_segments = self._segment_by_model(inner_expanded)
+                    for j, seg in enumerate(inner_segments):
+                        step_id = f"ref_{len(ref_steps) + 1}"
+                        step = self._build_step(step_id, seg)
+                        if j > 0:
+                            step.depends_on = [ref_steps[-1].id]
+                        ref_steps.append(step)
+
+                    last_ref_id = ref_steps[-1].id
+                    new_body = new_body.replace(match.group(0), f"{{{{ref:{last_ref_id}}}}}")
+
+                modified.append(TaskDirective(body=new_body, span=d.span))
+            else:
+                modified.append(d)
+
+        return ref_steps, modified
 
     def _build_plan(self, directives: list[DirectiveNode]) -> ExecutionPlan:
         """Build an execution plan from expanded directives.
@@ -147,7 +228,7 @@ class Compiler:
                 case "model":
                     model = d.value  # type: ignore[union-attr]
                 case "role":
-                    system_parts.append(d.value)  # type: ignore[union-attr]
+                    system_parts.append(expand_role(d.value))  # type: ignore[union-attr]
                 case "context":
                     system_parts.append(d.body)  # type: ignore[union-attr]
                 case "task":

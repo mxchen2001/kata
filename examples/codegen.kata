@@ -2,7 +2,7 @@
 
 @fn implement(spec) {
   @model claude-sonnet-4-6
-  @role You are a senior Python developer.
+  @role :coder(Python)
   @task {
     Implement the following specification as a Python module.
     Only output the code, no explanation.
@@ -16,7 +16,7 @@
 
 @fn test(framework) {
   @model claude-sonnet-4-6
-  @role You are a test engineer who writes thorough, readable tests.
+  @role :tester
   @task {
     Given the Python module above, write a comprehensive test suite using ${framework}.
     Cover: happy path, edge cases, and error cases.

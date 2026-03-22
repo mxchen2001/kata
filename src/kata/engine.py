@@ -143,9 +143,12 @@ class Engine:
         outputs: dict[str, str] = {}
 
         for step in plan.steps:
+            # Chain dependencies are prepended as context;
+            # ref dependencies are resolved inline via {{ref:...}} markers
             context = [
                 f"[Output from {dep}]\n{outputs[dep]}"
-                for dep in step.depends_on if dep in outputs
+                for dep in step.depends_on
+                if dep in outputs and not dep.startswith("ref_")
             ]
 
             if self._verbose:
@@ -153,11 +156,13 @@ class Engine:
                 deps = f" <- {', '.join(step.depends_on)}" if step.depends_on else ""
                 print(f">> {step.id} ({tag}){deps}", file=sys.stderr)
 
-            outputs[step.id] = self._execute_step(step, context)
+            outputs[step.id] = self._execute_step(step, context, outputs)
 
         return RunArtifact(plan=plan, outputs=outputs)
 
-    def _execute_step(self, step: Step, context: list[str]) -> str:
+    def _execute_step(
+        self, step: Step, context: list[str], all_outputs: dict[str, str] | None = None,
+    ) -> str:
         """Build messages and dispatch to the right provider."""
         # System: role/context + constraints
         system_parts: list[str] = []
@@ -174,7 +179,12 @@ class Engine:
         if context:
             user_parts.extend(context)
         if step.user:
-            user_parts.append(step.user)
+            user_text = step.user
+            # Resolve inline {{ref:step_id}} markers with actual outputs
+            if all_outputs and "{{ref:" in user_text:
+                for ref_id, ref_output in all_outputs.items():
+                    user_text = user_text.replace(f"{{{{ref:{ref_id}}}}}", ref_output)
+            user_parts.append(user_text)
         if step.output:
             fmt = ", ".join(f"{k}: {v}" for k, v in step.output.items())
             user_parts.append(f"Output format: {fmt}")

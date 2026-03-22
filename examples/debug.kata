@@ -2,7 +2,7 @@
 
 @model claude-sonnet-4-6
 
-@role You are a debugger. You think step by step and narrow down root causes.
+@role :debugger
 
 @task {
   Given the error message, stack trace, and relevant source code:

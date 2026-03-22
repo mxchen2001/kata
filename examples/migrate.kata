@@ -2,7 +2,7 @@
 
 @model claude-opus-4-6
 
-@role You are an expert at migrating codebases between frameworks and libraries.
+@role :migrator
 
 @context {
   Source framework: React class components with Redux
