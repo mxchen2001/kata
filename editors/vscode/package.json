@@ -1,13 +1,17 @@
 {
   "name": "kata-lang",
   "displayName": "Kata 型",
-  "description": "Syntax highlighting for the Kata LLM programming language",
-  "version": "0.1.0",
+  "description": "Language support for the Kata LLM programming language",
+  "version": "0.2.0",
   "publisher": "kata",
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": ["Programming Languages"],
+  "activationEvents": [
+    "onLanguage:kata"
+  ],
+  "main": "./extension.js",
   "contributes": {
     "languages": [
       {
@@ -27,6 +31,16 @@
         "scopeName": "source.kata",
         "path": "./syntaxes/kata.tmLanguage.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Kata",
+      "properties": {
+        "kata.pythonPath": {
+          "type": "string",
+          "default": "python3",
+          "description": "Path to Python interpreter with kata installed"
+        }
+      }
+    }
   }
 }

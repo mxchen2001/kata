@@ -5,7 +5,11 @@ import glob as globmod
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from .ast import Program, DirectiveNode, FnDirective, ImportDirective, TaskDirective
+import os
+from .ast import (
+    Program, DirectiveNode, FnDirective, ImportDirective, TaskDirective,
+    ChainDirective, VarDirective, IfDirective,
+)
 from .lexer import Lexer
 from .parser import Parser
 from .roles import expand_role
@@ -65,23 +69,52 @@ class Compiler:
     def __init__(self, *, base_path: Path | None = None) -> None:
         self._base_path = base_path or Path(".")
 
+    @staticmethod
+    def preprocess(source: str) -> str:
+        """Pre-process source text: extract @var definitions and substitute them.
+
+        This runs before lexing so that ${name} references inside braces
+        are replaced before the lexer encounters them.
+        """
+        variables: dict[str, str] = {}
+        output_lines: list[str] = []
+        for line in source.splitlines(True):
+            stripped = line.strip()
+            if stripped.startswith("@var "):
+                parts = stripped[5:].split(None, 1)
+                if len(parts) == 2:
+                    variables[parts[0]] = parts[1]
+            else:
+                output_lines.append(line)
+        result = "".join(output_lines)
+        for var_name, var_value in variables.items():
+            result = result.replace(f"${{{var_name}}}", var_value)
+        return result
+
     def compile(self, program: Program) -> ExecutionPlan:
-        fns: dict[str, FnDirective] = {}
+        directives = list(program.directives)
+
+        # Evaluate @if directives — conditionally include their body
+        directives = self._evaluate_ifs(directives)
 
         # Resolve @import directives — pull in @fn defs from other files
-        for d in program.directives:
+        fns: dict[str, FnDirective] = {}
+        for d in directives:
             if d.kind == "import":
                 assert isinstance(d, ImportDirective)
                 imported_fns = self._resolve_import(d.path)
                 for fn in imported_fns:
                     fns[fn.name] = fn
 
-        for d in program.directives:
+        for d in directives:
             if d.kind == "fn":
                 assert isinstance(d, FnDirective)
                 fns[d.name] = d
 
-        expanded = self._expand_calls(program.directives, fns)
+        # Expand @chain directives into sequential steps
+        directives = self._expand_chains(directives)
+
+        expanded = self._expand_calls(directives, fns)
         ref_steps, expanded = self._resolve_inline_uses(expanded, fns)
         plan = self._build_plan(expanded)
 
@@ -97,6 +130,49 @@ class Compiler:
 
         plan = self._optimize(plan)
         return plan
+
+    def _evaluate_ifs(self, directives: list[DirectiveNode]) -> list[DirectiveNode]:
+        """Evaluate @if directives at compile time. If true, parse and include their body."""
+        result: list[DirectiveNode] = []
+        for d in directives:
+            if d.kind == "if":
+                assert isinstance(d, IfDirective)
+                if self._eval_condition(d.condition):
+                    # Parse the body as directives and include them
+                    inner_tokens = Lexer(d.body).tokenize()
+                    inner_ast = Parser(inner_tokens).parse()
+                    result.extend(inner_ast.directives)
+            else:
+                result.append(d)
+        return result
+
+    def _eval_condition(self, condition: str) -> bool:
+        """Evaluate an @if condition string."""
+        import re as _re
+        # file_exists(path)
+        m = _re.match(r"file_exists\((.+)\)", condition)
+        if m:
+            path = m.group(1).strip().strip("'\"")
+            return (self._base_path / path).is_file()
+        # env(VAR)
+        m = _re.match(r"env\((\w+)\)", condition)
+        if m:
+            return os.environ.get(m.group(1), "") != ""
+        return False
+
+    def _expand_chains(self, directives: list[DirectiveNode]) -> list[DirectiveNode]:
+        """Expand @chain into sequential directives with @model boundaries."""
+        result: list[DirectiveNode] = []
+        for d in directives:
+            if d.kind == "chain":
+                assert isinstance(d, ChainDirective)
+                for step in d.steps:
+                    inner_tokens = Lexer(step.body).tokenize()
+                    inner_ast = Parser(inner_tokens).parse()
+                    result.extend(inner_ast.directives)
+            else:
+                result.append(d)
+        return result
 
     def _resolve_import(self, path: str) -> list[FnDirective]:
         """Load a .kata file and extract its @fn definitions."""

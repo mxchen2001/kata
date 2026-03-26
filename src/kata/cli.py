@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .lexer import Lexer
 from .parser import Parser, ParseError
-from .compiler import Compiler, Step
+from .compiler import Compiler, Step, ExecutionPlan
 from .decompiler import Decompiler
 from .diagnostics import diagnose, format_diagnostics, has_errors
 from .engine import Engine, load_plan, _load_dotenv
@@ -73,6 +73,7 @@ def _emit(content: str, output_path: str | None) -> None:
 def _safe_parse(file_path: str):
     try:
         source = Path(file_path).read_text(encoding="utf-8")
+        source = Compiler.preprocess(source)
         tokens = Lexer(source).tokenize()
         ast = Parser(tokens).parse()
         return source, tokens, ast
@@ -294,6 +295,10 @@ def main() -> None:
     p_decompile = sub.add_parser("decompile", aliases=["d"], help="Read plan JSON from stdin, output .kata source")
     p_decompile.add_argument("-o", "--output", help="Write output to file")
     p_decompile.set_defaults(func=cmd_decompile)
+
+    # lsp
+    p_lsp = sub.add_parser("lsp", help="Start the language server (for editor integration)")
+    p_lsp.set_defaults(func=lambda _: __import__("kata.lsp", fromlist=["main"]).main())
 
     args = parser.parse_args()
     if not args.command:

@@ -10,6 +10,7 @@ from .compiler import Compiler, ExecutionPlan
 
 
 def compile_source(source: str, base_path: Path | None = None) -> ExecutionPlan:
+    source = Compiler.preprocess(source)
     tokens = Lexer(source).tokenize()
     ast = Parser(tokens).parse()
     return Compiler(base_path=base_path).compile(ast)
@@ -269,6 +270,135 @@ class TestImport(unittest.TestCase):
 """
             plan = compile_source(source, base_path=Path(tmpdir))
             self.assertIn("Local hello.", plan.steps[0].user)
+
+
+class TestVar(unittest.TestCase):
+    def test_var_substitution(self):
+        source = """
+@var lang Python
+@model gpt-4o
+@role You are a ${lang} developer.
+@task Write ${lang} code.
+"""
+        plan = compile_source(source)
+        self.assertEqual(plan.steps[0].system, "You are a Python developer.")
+        self.assertIn("Write Python code.", plan.steps[0].user)
+
+    def test_var_in_constraint(self):
+        source = """
+@var framework pytest
+@model gpt-4o
+@task Write tests.
+@constraint Use ${framework}.
+"""
+        plan = compile_source(source)
+        self.assertIn("Use pytest.", plan.steps[0].constraints)
+
+    def test_multiple_vars(self):
+        source = """
+@var lang TypeScript
+@var style functional
+@model gpt-4o
+@task Write ${style} ${lang} code.
+"""
+        plan = compile_source(source)
+        self.assertIn("Write functional TypeScript code.", plan.steps[0].user)
+
+
+class TestChain(unittest.TestCase):
+    def test_chain_creates_steps(self):
+        source = """
+@chain {
+  @step design {
+    @model gpt-4o
+    @task Design the API.
+  }
+  @step implement {
+    @model claude-sonnet-4-6
+    @task Implement the API.
+  }
+}
+"""
+        plan = compile_source(source)
+        self.assertEqual(len(plan.steps), 2)
+        self.assertEqual(plan.steps[0].model, "gpt-4o")
+        self.assertIn("Design the API.", plan.steps[0].user)
+        self.assertEqual(plan.steps[1].model, "claude-sonnet-4-6")
+        self.assertIn("Implement the API.", plan.steps[1].user)
+        self.assertEqual(plan.steps[1].depends_on, ["step_1"])
+
+    def test_chain_with_shared_role(self):
+        source = """
+@role You are a senior engineer.
+@chain {
+  @step plan {
+    @model gpt-4o
+    @task Plan the work.
+  }
+  @step code {
+    @model gpt-4o
+    @task Write the code.
+  }
+}
+"""
+        plan = compile_source(source)
+        # Shared role should be prepended to each step
+        self.assertIn("senior engineer", plan.steps[0].system or "")
+        self.assertIn("senior engineer", plan.steps[1].system or "")
+
+
+class TestIf(unittest.TestCase):
+    def test_if_file_exists_true(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "data.txt").write_text("hello")
+            source = """
+@model gpt-4o
+@task Base task.
+@if file_exists(data.txt) {
+  @constraint Include data from data.txt.
+}
+"""
+            plan = compile_source(source, base_path=Path(tmpdir))
+            self.assertIn("Include data from data.txt.", plan.steps[0].constraints)
+
+    def test_if_file_exists_false(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = """
+@model gpt-4o
+@task Base task.
+@if file_exists(missing.txt) {
+  @constraint This should not appear.
+}
+"""
+            plan = compile_source(source, base_path=Path(tmpdir))
+            self.assertEqual(plan.steps[0].constraints, [])
+
+    def test_if_env_true(self):
+        os.environ["KATA_TEST_VAR"] = "1"
+        try:
+            source = """
+@model gpt-4o
+@task Base task.
+@if env(KATA_TEST_VAR) {
+  @constraint Env var is set.
+}
+"""
+            plan = compile_source(source)
+            self.assertIn("Env var is set.", plan.steps[0].constraints)
+        finally:
+            del os.environ["KATA_TEST_VAR"]
+
+    def test_if_env_false(self):
+        os.environ.pop("KATA_MISSING_VAR", None)
+        source = """
+@model gpt-4o
+@task Base task.
+@if env(KATA_MISSING_VAR) {
+  @constraint This should not appear.
+}
+"""
+        plan = compile_source(source)
+        self.assertEqual(plan.steps[0].constraints, [])
 
 
 if __name__ == "__main__":

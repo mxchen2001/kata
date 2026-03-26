@@ -11,6 +11,10 @@ from .ast import (
     TaskDirective,
     OutputDirective,
     ConstraintDirective,
+    ChainDirective,
+    ChainStep,
+    VarDirective,
+    IfDirective,
     FnDirective,
     RetryDirective,
     ImportDirective,
@@ -67,6 +71,12 @@ class Parser:
                 return self._parse_constraint(at_token)
             case "retry":
                 return self._parse_retry(at_token)
+            case "chain":
+                return self._parse_chain(at_token)
+            case "var":
+                return self._parse_var(at_token)
+            case "if":
+                return self._parse_if(at_token)
             case "fn":
                 return self._parse_fn(at_token)
             case "import":
@@ -126,6 +136,75 @@ class Parser:
     def _parse_constraint(self, at: Token) -> ConstraintDirective:
         body = self._read_inline_or_block()
         return ConstraintDirective(body=body, span=self._make_span(at, self._previous()))
+
+    def _parse_chain(self, at: Token) -> ChainDirective:
+        self._skip_newlines()
+        self._expect(TokenKind.BraceOpen)
+        body_token = self._expect(TokenKind.Body)
+        self._expect(TokenKind.BraceClose)
+        # Parse @step blocks from the chain body
+        steps = self._parse_chain_steps(body_token.value, at)
+        return ChainDirective(steps=steps, span=self._make_span(at, self._previous()))
+
+    def _parse_chain_steps(self, body: str, parent_token: Token) -> list[ChainStep]:
+        """Parse @step name { ... } blocks from a @chain body."""
+        import re
+        steps: list[ChainStep] = []
+        # Match @step name { body }
+        pattern = re.compile(r"@step\s+(\w+)\s*\{")
+        pos = 0
+        while pos < len(body):
+            m = pattern.search(body, pos)
+            if not m:
+                break
+            name = m.group(1)
+            # Find matching closing brace
+            brace_start = m.end()
+            depth = 1
+            i = brace_start
+            while i < len(body) and depth > 0:
+                if body[i] == "{":
+                    depth += 1
+                elif body[i] == "}":
+                    depth -= 1
+                i += 1
+            step_body = body[brace_start:i - 1].strip()
+            steps.append(ChainStep(
+                name=name,
+                body=step_body,
+                span=self._make_span(parent_token, parent_token),
+            ))
+            pos = i
+        return steps
+
+    def _parse_var(self, at: Token) -> VarDirective:
+        text = self._read_inline_or_block().strip()
+        # Split on first whitespace: @var name value
+        parts = text.split(None, 1)
+        name = parts[0] if parts else ""
+        value = parts[1] if len(parts) > 1 else ""
+        return VarDirective(name=name, value=value, span=self._make_span(at, self._previous()))
+
+    def _parse_if(self, at: Token) -> IfDirective:
+        # Read condition inline, then block body
+        # @if file_exists(path) { directives }
+        condition_parts: list[str] = []
+        while (
+            not self._is_at_end()
+            and not self._check(TokenKind.BraceOpen)
+            and not self._check(TokenKind.Newline)
+            and not self._check(TokenKind.EOF)
+        ):
+            condition_parts.append(self._advance().value)
+        condition = "".join(condition_parts).strip()
+
+        body = ""
+        if self._check(TokenKind.BraceOpen):
+            self._advance()
+            body_token = self._expect(TokenKind.Body)
+            self._expect(TokenKind.BraceClose)
+            body = body_token.value
+        return IfDirective(condition=condition, body=body, span=self._make_span(at, self._previous()))
 
     def _parse_retry(self, at: Token) -> RetryDirective:
         text = self._read_inline_or_block().strip()

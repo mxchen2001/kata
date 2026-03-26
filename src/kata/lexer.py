@@ -99,7 +99,7 @@ class Lexer:
             name = self._source[start : self._pos]
             self._emit(TokenKind.Identifier, name)
 
-            if name in ("fn", "call"):
+            if name in ("fn", "call", "step"):
                 self._skip_ws()
                 name_start = self._pos
                 while self._pos < len(self._source) and _IDENT_CONT_RE.match(self._source[self._pos]):

@@ -60,11 +60,10 @@ class ConstraintDirective:
     span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
 
 
-# TODO: ChainStep/ChainDirective are AST-only — not yet wired into lexer, parser, or compiler.
 @dataclass
 class ChainStep:
     name: str = ""
-    directives: list[DirectiveNode] = field(default_factory=list)
+    body: str = ""
     span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
 
 
@@ -72,6 +71,22 @@ class ChainStep:
 class ChainDirective:
     kind: str = field(default="chain", init=False)
     steps: list[ChainStep] = field(default_factory=list)
+    span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
+
+
+@dataclass
+class VarDirective:
+    kind: str = field(default="var", init=False)
+    name: str = ""
+    value: str = ""
+    span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
+
+
+@dataclass
+class IfDirective:
+    kind: str = field(default="if", init=False)
+    condition: str = ""  # "file_exists(path)" or "env(VAR)"
+    body: str = ""
     span: Span = field(default_factory=lambda: Span(Position(0, 0), Position(0, 0)))
 
 
@@ -114,6 +129,8 @@ DirectiveNode = Union[
     OutputDirective,
     ConstraintDirective,
     ChainDirective,
+    VarDirective,
+    IfDirective,
     FnDirective,
     RetryDirective,
     ImportDirective,
